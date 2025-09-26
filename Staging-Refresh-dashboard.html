@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staging DB Refresh Status Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js" defer></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            white-space: nowrap;
+        }
+        .status-menu {
+            position: absolute;
+            z-index: 10;
+            /* display: none; is now handled by Alpine's x-show */
+            background-color: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            right: 0;
+            margin-top: 0.25rem;
+            width: 120px;
+        }
+        .status-menu-item {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 1rem;
+            text-align: left;
+            font-size: 0.875rem;
+            color: #374151;
+        }
+        .status-menu-item:hover {
+            background-color: #f3f4f6;
+        }
+        /* Removed .group:hover .status-menu rule */
+
+        /* Animations */
+        @keyframes pulse-bg {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .status-in-progress {
+            animation: pulse-bg 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* Custom scrollbar for code blocks */
+        pre::-webkit-scrollbar {
+            height: 8px;
+        }
+        pre::-webkit-scrollbar-track {
+            background: #2d3748;
+            border-radius: 10px;
+        }
+        pre::-webkit-scrollbar-thumb {
+            background-color: #4a5568;
+            border-radius: 10px;
+            border: 2px solid #2d3748;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 p-4 sm:p-6 lg:p-8">
+    <div x-data="dashboardState()" x-init="init()" class="max-w-7xl mx-auto">
+
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Staging DB Refresh</h1>
+                    <p class="text-gray-500 mt-1">Live Status Dashboard</p>
+                </div>
+                <div class="text-lg font-medium text-gray-700 bg-white px-4 py-2 rounded-lg shadow-sm mt-4 md:mt-0" x-text="currentTime"></div>
+            </div>
+            
+            <!-- Key Info Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                <div class="bg-white p-4 rounded-lg shadow-sm flex items-center">
+                    <svg class="h-8 w-8 text-blue-500 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <div>
+                        <p class="text-sm text-gray-500">Date</p>
+                        <p class="font-semibold">Monday, 29th September</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-sm flex items-center">
+                     <svg class="h-8 w-8 text-blue-500 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <p class="text-sm text-gray-500">Time Window</p>
+                        <p class="font-semibold">9am - 2pm</p>
+                    </div>
+                </div>
+                 <div class="bg-white p-4 rounded-lg shadow-sm flex items-center">
+                    <svg class="h-8 w-8 text-blue-500 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    <div>
+                        <p class="text-sm text-gray-500">Code Freeze</p>
+                        <p class="font-semibold" :class="isCodeFreezeActive ? 'text-red-600' : 'text-green-600'" x-text="isCodeFreezeActive ? 'ACTIVE' : 'INACTIVE'"></p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-sm flex items-center">
+                    <svg class="h-8 w-8 text-blue-500 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    <div>
+                        <p class="text-sm text-gray-500">Contacts</p>
+                        <p class="font-semibold">SRE, DBAs, Richard</p>
+                    </div>
+                </div>
+            </div>
+            
+             <!-- Progress Bars -->
+            <div class="mt-6 space-y-4">
+                <div class="bg-white p-4 rounded-lg shadow-sm">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-semibold text-gray-700">Preparation Progress</h3>
+                        <span class="text-sm font-semibold text-gray-600" x-text="`${preparationProgress.completed} / ${preparationProgress.total} Tasks`"></span>
+                    </div>
+                    <div class="overflow-hidden h-4 text-xs flex rounded" :class="preparationProgressColor.bg">
+                        <div :style="`width: ${preparationProgress.percent}%`" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-500" :class="preparationProgressColor.fill"></div>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-sm">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-semibold text-gray-700">Refresh Day Progress</h3>
+                        <span class="text-sm font-semibold text-gray-600" x-text="`${refreshDayProgress.completed} / ${refreshDayProgress.total} Tasks`"></span>
+                    </div>
+                    <div class="overflow-hidden h-4 text-xs flex rounded" :class="refreshDayProgressColor.bg">
+                        <div :style="`width: ${refreshDayProgress.percent}%`" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-500" :class="refreshDayProgressColor.fill"></div>
+                    </div>
+                </div>
+            </div>
+
+        </header>
+
+        <!-- Main Content -->
+        <main x-data="{ activeTab: 'roadmap' }">
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                    <a href="#" @click.prevent="activeTab = 'roadmap'" :class="{'border-blue-500 text-blue-600': activeTab === 'roadmap', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'roadmap'}" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Roadmap</a>
+                    <a href="#" @click.prevent="activeTab = 'databases'" :class="{'border-blue-500 text-blue-600': activeTab === 'databases', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'databases'}" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Databases</a>
+                    <a href="#" @click.prevent="activeTab = 'gcp'" :class="{'border-blue-500 text-blue-600': activeTab === 'gcp', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'gcp'}" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">GCP Commands</a>
+                </nav>
+            </div>
+            
+            <!-- Roadmap Tab -->
+            <div x-show="activeTab === 'roadmap'" x-cloak>
+                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Preparation -->
+                    <section>
+                        <h2 class="text-xl font-bold mb-4">Preparation</h2>
+                        <ul class="space-y-3">
+                            <template x-for="(task, index) in roadmap.preparation" :key="index">
+                                <li class="bg-white p-4 rounded-lg shadow-sm">
+                                    <div class="flex items-center justify-between">
+                                        <span class="flex-1 font-medium" x-text="task.name"></span>
+                                        <div class="flex items-center space-x-2 ml-2">
+                                             <button @click="openNotesModal(task)" class="text-gray-400 hover:text-gray-600">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z"></path></svg>
+                                            </button>
+                                            <div class="relative">
+                                                <span @click="toggleMenu(task)" :class="statusClasses[task.status]" class="status-badge" x-text="task.status"></span>
+                                                <div class="status-menu" x-show="activeMenu === task" @click.outside="activeMenu = null" style="display: none;">
+                                                    <template x-for="s in Object.keys(statusClasses)">
+                                                        <button @click="setStatus(task, s)" class="status-menu-item" x-text="s"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p x-show="task.notes" x-text="task.notes" class="mt-2 text-sm text-gray-600 bg-yellow-50 p-2 rounded-md border-l-4 border-yellow-300"></p>
+                                </li>
+                            </template>
+                        </ul>
+                    </section>
+                    <!-- Refresh Day -->
+                    <section>
+                        <h2 class="text-xl font-bold mb-4">Refresh Day</h2>
+                        <ul class="space-y-3">
+                            <template x-for="(task, index) in roadmap.refreshDay" :key="index">
+                                <li class="bg-white p-4 rounded-lg shadow-sm">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1">
+                                            <p class="font-medium" x-text="task.name"></p>
+                                            <p x-show="task.details" class="text-xs text-gray-500 mt-1" x-text="task.details"></p>
+                                        </div>
+                                        <div class="flex items-center space-x-2 ml-2">
+                                            <button @click="openNotesModal(task)" class="text-gray-400 hover:text-gray-600">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z"></path></svg>
+                                            </button>
+                                            <div class="relative">
+                                                <span @click="toggleMenu(task)" :class="statusClasses[task.status]" class="status-badge" x-text="task.status"></span>
+                                                <div class="status-menu" x-show="activeMenu === task" @click.outside="activeMenu = null" style="display: none;">
+                                                    <template x-for="s in Object.keys(statusClasses)">
+                                                        <button @click="setStatus(task, s)" class="status-menu-item" x-text="s"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p x-show="task.notes" x-text="task.notes" class="mt-2 text-sm text-gray-600 bg-yellow-50 p-2 rounded-md border-l-4 border-yellow-300"></p>
+                                </li>
+                            </template>
+                        </ul>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Databases Tab -->
+            <div x-show="activeTab === 'databases'" x-cloak>
+                 <!-- MariaDB -->
+                <section class="mb-8">
+                    <h2 class="text-xl font-bold mb-4">MariaDB and CloudSQL</h2>
+                    <div class="overflow-x-auto bg-white rounded-lg shadow-sm">
+                        <table class="w-full text-sm text-left text-gray-500">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3">Cluster</th>
+                                    <th scope="col" class="px-6 py-3">Included</th>
+                                    <th scope="col" class="px-6 py-3">Developer</th>
+                                    <th scope="col" class="px-6 py-3">QA</th>
+                                    <th scope="col" class="px-6 py-3">Notes</th>
+                                    <th scope="col" class="px-6 py-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(db, index) in databases.mariaDb" :key="index">
+                                    <tr class="bg-white border-b hover:bg-gray-50">
+                                        <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap" x-text="db.cluster"></td>
+                                        <td class="px-6 py-4" x-text="db.included ? 'Yes' : 'No'"></td>
+                                        <td class="px-6 py-4" x-text="db.developer"></td>
+                                        <td class="px-6 py-4" x-text="db.qa"></td>
+                                        <td class="px-6 py-4">
+                                            <button @click="openNotesModal(db)" class="text-gray-400 hover:text-gray-600">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z"></path></svg>
+                                            </button>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="relative">
+                                                <span @click="toggleMenu(db)" :class="statusClasses[db.status]" class="status-badge" x-text="db.status"></span>
+                                                 <div class="status-menu" x-show="activeMenu === db" @click.outside="activeMenu = null" style="display: none;">
+                                                    <template x-for="s in Object.keys(statusClasses)">
+                                                        <button @click="setStatus(db, s)" class="status-menu-item" x-text="s"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                <!-- MongoDB -->
+                <section class="mb-8">
+                    <h2 class="text-xl font-bold mb-4">MongoDB</h2>
+                     <div class="overflow-x-auto bg-white rounded-lg shadow-sm">
+                        <table class="w-full text-sm text-left text-gray-500">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3">Cluster</th>
+                                    <th scope="col" class="px-6 py-3">Included</th>
+                                    <th scope="col" class="px-6 py-3">Developer</th>
+                                    <th scope="col" class="px-6 py-3">QA</th>
+                                     <th scope="col" class="px-6 py-3">Notes</th>
+                                    <th scope="col" class="px-6 py-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(db, index) in databases.mongoDb.filter(d => d.included)" :key="index">
+                                     <tr class="bg-white border-b hover:bg-gray-50">
+                                        <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap" x-text="db.cluster"></td>
+                                        <td class="px-6 py-4" x-text="db.included ? 'Yes' : 'No'"></td>
+                                        <td class="px-6 py-4" x-text="db.developer"></td>
+                                        <td class="px-6 py-4" x-text="db.qa"></td>
+                                        <td class="px-6 py-4">
+                                            <button @click="openNotesModal(db)" class="text-gray-400 hover:text-gray-600">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z"></path></svg>
+                                            </button>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="relative">
+                                                <span @click="toggleMenu(db)" :class="statusClasses[db.status]" class="status-badge" x-text="db.status"></span>
+                                                 <div class="status-menu" x-show="activeMenu === db" @click.outside="activeMenu = null" style="display: none;">
+                                                    <template x-for="s in Object.keys(statusClasses)">
+                                                        <button @click="setStatus(db, s)" class="status-menu-item" x-text="s"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                <!-- Firestore -->
+                <section>
+                    <h2 class="text-xl font-bold mb-4">Firestore</h2>
+                    <div class="overflow-x-auto bg-white rounded-lg shadow-sm">
+                        <table class="w-full text-sm text-left text-gray-500">
+                             <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3">Cluster</th>
+                                    <th scope="col" class="px-6 py-3">Included</th>
+                                    <th scope="col" class="px-6 py-3">Developer</th>
+                                    <th scope="col" class="px-6 py-3">QA</th>
+                                     <th scope="col" class="px-6 py-3">Notes</th>
+                                    <th scope="col" class="px-6 py-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(db, index) in databases.firestore.filter(d => d.included)" :key="index">
+                                    <tr class="bg-white border-b hover:bg-gray-50">
+                                        <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap" x-text="db.cluster"></td>
+                                        <td class="px-6 py-4" x-text="db.included ? 'Yes' : 'No'"></td>
+                                        <td class="px-6 py-4" x-text="db.developer"></td>
+                                        <td class="px-6 py-4" x-text="db.qa"></td>
+                                        <td class="px-6 py-4">
+                                            <button @click="openNotesModal(db)" class="text-gray-400 hover:text-gray-600">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z"></path></svg>
+                                            </button>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="relative">
+                                                <span @click="toggleMenu(db)" :class="statusClasses[db.status]" class="status-badge" x-text="db.status"></span>
+                                                 <div class="status-menu" x-show="activeMenu === db" @click.outside="activeMenu = null" style="display: none;">
+                                                    <template x-for="s in Object.keys(statusClasses)">
+                                                        <button @click="setStatus(db, s)" class="status-menu-item" x-text="s"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- GCP Commands Tab -->
+            <div x-show="activeTab === 'gcp'" x-cloak>
+                <div class="space-y-6">
+                    <template x-for="(commands, title) in gcpCommands" :key="title">
+                        <div class="bg-white rounded-lg shadow-sm p-4">
+                            <h3 class="font-semibold text-lg mb-2" x-text="title"></h3>
+                            <div class="bg-gray-800 text-gray-200 rounded-md p-4 relative">
+                                <button @click="copyToClipboard($event.target)" class="absolute top-2 right-2 bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded text-xs">
+                                    Copy
+                                </button>
+                                <pre class="overflow-x-auto"><code x-text="commands.join('\n\n')"></code></pre>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Notes Modal -->
+        <div x-show="notesModalOpen" @keydown.escape.window="closeNotesModal()" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+            <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                <!-- Background overlay -->
+                <div x-show="notesModalOpen" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 transition-opacity" @click="closeNotesModal()">
+                    <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                </div>
+
+                <!-- This element is to trick the browser into centering the modal contents. -->
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen"></span>&#8203;
+
+                <!-- Modal panel -->
+                <div x-show="notesModalOpen" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block w-full max-w-lg p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-lg" role="dialog" aria-modal="true" aria-labelledby="modal-headline">
+                    <div>
+                        <h3 class="text-lg font-medium leading-6 text-gray-900" id="modal-headline">
+                            Add/Edit Note for <span class="font-bold" x-text="currentTaskForNotes?.name || currentTaskForNotes?.cluster"></span>
+                        </h3>
+                        <div class="mt-4">
+                            <textarea x-model="noteInputText" rows="4" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Type your notes here..."></textarea>
+                        </div>
+                    </div>
+                    <div class="mt-5 sm:mt-6 sm:flex sm:flex-row-reverse">
+                        <button @click="saveNote()" type="button" class="inline-flex justify-center w-full px-4 py-2 text-base font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+                            Save
+                        </button>
+                        <button @click="closeNotesModal()" type="button" class="inline-flex justify-center w-full px-4 py-2 mt-3 text-base font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+    function dashboardState() {
+        return {
+            currentTime: new Date().toLocaleTimeString('en-IE', { timeZone: 'Europe/Dublin', hour: '2-digit', minute:'2-digit', second:'2-digit' }),
+            activeMenu: null,
+            notesModalOpen: false,
+            currentTaskForNotes: null,
+            noteInputText: '',
+            isCodeFreezeActive: false,
+            statusClasses: {
+                'Pending': 'bg-gray-200 text-gray-800',
+                'In Progress': 'bg-yellow-200 text-yellow-800 status-in-progress',
+                'Completed': 'bg-green-200 text-green-800',
+                'Issue': 'bg-red-200 text-red-800',
+                'Skipped': 'bg-blue-100 text-blue-800'
+            },
+            roadmap: {
+                preparation: [
+                    { name: 'Create MariaDB disks from latest snapshots', status: 'In Progress', notes: ''},
+                    { name: 'Create Firestore extracts for relevant collections', status: 'In Progress', notes: ''},
+                    { name: 'Developers to confirm snapshot costs', status: 'Skipped', notes: ''},
+                    { name: 'No MongoDB prep work necessary', status: 'Skipped', notes: ''},
+                    { name: 'Richard Bywater to run baseline performance tests', status: 'Completed', notes: ''},
+                    { name: 'Richard Bywater activate test properties in Live', status: 'Pending', notes: ''},
+                ],
+                refreshDay: [
+                    { name: 'CODE FREEZE', details: 'No deployments to staging.', status: 'Pending', notes: 'Starting at 9am'},
+                    { name: 'MariaDB Refresh', details: 'Disable CDC, TRUNCATE PINPAY, etc.', status: 'Pending', notes: ''},
+                    { name: 'MongoDB Refresh', details: 'In parallel - update SequenceId table.', status: 'Pending', notes: ''},
+                    { name: 'Firestore Refresh', details: 'To be done once MariaDB is complete.', status: 'Pending', notes: ''},
+                    { name: 'QA Testing', details: 'Until 2:00 PM', status: 'Pending', notes: ''},
+                ]
+            },
+            databases: {
+                mariaDb: [
+                    { cluster: 'DB266 - MariaDB', included: true, developer: 'Richard Bywater', qa: 'N/A', status: 'Pending', notes: '' },
+                    { cluster: 'DB267 - MariaDB', included: false, developer: 'Lourens de Jager', qa: 'Richard Bywater', status: 'Skipped', notes: 'Excluding due to issue ITCC-21416 from last refresh.' },
+                    { cluster: 'DB268 - MariaDB', included: true, developer: 'Richard Bywater', qa: 'N/A', status: 'Pending', notes: '' },
+                    { cluster: 'DB269 - CloudSQL', included: true, developer: 'Richard Bywater', qa: 'N/A', status: 'Pending', notes: '' }
+                ],
+                mongoDb: [
+                    { cluster: 'booking-staging', included: false, status: 'Skipped', notes: '' },
+                    { cluster: 'consumer-staging', included: true, developer: 'Olusola Oseni (Tunga)', qa: 'Ronan Keane', status: 'Pending', notes: '' },
+                    { cluster: 'geospatial-staging', included: false, status: 'Skipped', notes: '' },
+                    { cluster: 'inventory-staging', included: true, developer: 'Levi Nagy', qa: 'Ronan Keane', status: 'Pending', notes: '' },
+                    { cluster: 'linkups-staging', included: true, developer: "Rory O'Siochain", qa: 'Milan Nicic (Nistruct)', status: 'Pending', notes: '' },
+                    { cluster: 'locations-staging', included: false, status: 'Skipped', notes: '' },
+                    { cluster: 'nx-boilerplate-staging', included: false, status: 'Skipped', notes: '' },
+                    { cluster: 'payment-staging', included: true, developer: 'Diogo Mendonca', qa: 'James Keappock', status: 'Pending', notes: '' },
+                    { cluster: 'places-staging', included: true, developer: 'Alan Smith', qa: 'Miguel Mendes', status: 'Pending', notes: '' },
+                    { cluster: 'post-trips-staging', included: true, developer: "Rory O'Siochain", qa: 'Milan Nicic (Nistruct)', status: 'Pending', notes: '' },
+                    { cluster: 'pricing-staging', included: true, developer: 'Diogo Mendonca', qa: 'James Keappock', status: 'Pending', notes: '' },
+                    { cluster: 'property-staging', included: true, developer: 'Levi Nagy', qa: 'Ronan Keane', status: 'Pending', notes: '' },
+                    { cluster: 'recommendations-staging', included: true, developer: "Rory O'Siochain", qa: 'Milan Nicic (Nistruct)', status: 'Pending', notes: '' },
+                    { cluster: 'sc-reservations-staging', included: false, status: 'Skipped', notes: '' },
+                    { cluster: 'sendbird-staging', included: true, developer: "Rory O'Siochain", qa: 'Milan Nicic (Nistruct)', status: 'Pending', notes: '' },
+                    { cluster: 'traveler-profile-staging', included: false, status: 'Skipped', notes: '' },
+                    { cluster: 'zentrum-proxy-staging', included: false, status: 'Skipped', notes: '' }
+                ],
+                firestore: [
+                    { cluster: 'hw-stage-inv-mgmt-plat-f120', included: true, developer: 'Levi Nagy', qa: 'Ronan Keane', status: 'Pending', notes: ''},
+                    { cluster: 'hw-stage-pay-mgmt-plat-7a44', included: false, status: 'Skipped', notes: ''},
+                    { cluster: 'hw-stage-soc-mgmt-plat-2f44', included: true, developer: "Rory O'Siochain", qa: 'Milan Nicic (Nistruct)', status: 'Pending', notes: ''},
+                    { cluster: 'hw-stage-bkg-mgmt-plat-28f3', included: true, developer: 'Diogo Mendonca', qa: 'James Keappock', status: 'Pending', notes: ''},
+                ]
+            },
+            gcpCommands: {
+                '#266 PRIMARY': [
+                    `gcloud compute disks create hw-staging-maria-db266-29092025-prim-vardata --project=hw-stag-sre-legacy-infra-824b --type=pd-balanced --zone=europe-west1-c --source-snapshot=projects/hw-dr-maria-db/global/snapshots/*`,
+                    `gcloud compute disks create hw-staging-maria-db266-29092025-prim-logs --project=hw-stag-sre-legacy-infra-824b --type=pd-balanced --zone=europe-west1-c --source-snapshot=projects/hw-dr-maria-db/global/snapshots/logs*`,
+                    `gcloud compute instances stop stg-db266-01 --zone=europe-west1-c`,
+                    `gcloud compute instances detach-disk stg-db266-01 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-dr-maria-db266-11102024-prim-vardata --zone=europe-west1-c`,
+                    `gcloud compute instances detach-disk stg-db266-01 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/stg-db266-01-prim-logs-snapshot-20240222 --zone=europe-west1-c`,
+                    `gcloud compute instances attach-disk stg-db266-01 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-staging-maria-db266-29092025-prim-vardata --zone=europe-west1-c`,
+                    `gcloud compute instances attach-disk stg-db266-01 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-staging-maria-db266-29092025-prim-logs --zone=europe-west1-c`,
+                    `gcloud compute instances start stg-db266-01 --zone=europe-west1-c`
+                ],
+                '#266 REPLICA': [
+                    `gcloud compute disks create hw-staging-maria-db266-29092025-replica-vardata --project=hw-stag-sre-legacy-infra-824b --type=pd-balanced --zone=europe-west1-d --source-snapshot=projects/hw-dr-maria-db/global/snapshots/*`,
+                    `gcloud compute disks create hw-staging-maria-db266-29092025-replica-logs --project=hw-stag-sre-legacy-infra-824b --type=pd-balanced --zone=europe-west1-c --source-snapshot=projects/hw-dr-maria-db/global/snapshots/logs*`,
+                    `gcloud compute instances stop stg-db266-02 --zone=europe-west1-d`,
+                    `gcloud compute instances detach-disk stg-db266-02 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-stag-maria-db266-30012025-replica-vardata --zone=europe-west1-d`,
+                    `gcloud compute instances detach-disk stg-db266-02 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/stg-db266-02-prim-logs-snapshot-20240222--zone=europe-west1-c`,
+                    `gcloud compute instances attach-disk stg-db266-02 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-staging-maria-db266-29092025-replica-vardata --zone=europe-west1-d`,
+                    `gcloud compute instances attach-disk stg-db266-02 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-staging-maria-db266-29092025-prim-logs --zone=europe-west1-c`,
+                    `gcloud compute instances start stg-db266-02 --zone=europe-west1-d`
+                ],
+                '#267 PRIMARY': [
+                    `gcloud compute disks create hw-staging-maria-db267-29092025-prim-vardata --project=hw-stag-sre-legacy-infra-824b --type=pd-balanced --zone=europe-west1-c --source-snapshot=projects/hw-dr-maria-db/global/snapshots/*`,
+                    `gcloud compute instances stop stg-db267-01 --zone=europe-west1-c`,
+                    `gcloud compute instances detach-disk stg-db267-01 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-dr-maria-db267-10102024-prim-vardata --zone=europe-west1-c`,
+                    `gcloud compute instances attach-disk stg-db267-01 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-staging-maria-db267-29092025-prim-vardata --zone=europe-west1-c`,
+                    `gcloud compute instances start stg-db267-01 --zone=europe-west1-c`
+                ],
+                '#267 REPLICA': [
+                    `gcloud compute disks create hw-staging-maria-db267-29092025-replica-vardata --project=hw-stag-sre-legacy-infra-824b --type=pd-balanced --zone=europe-west1-c --source-snapshot=projects/hw-dr-maria-db/global/snapshots/*`,
+                    `gcloud compute instances stop stg-db267-02 --zone=europe-west1-d`,
+                    `gcloud compute instances detach-disk stg-db267-02 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-dr-maria-db267-10102024-replica-vardata --zone=europe-west1-d`,
+                    `gcloud compute instances attach-disk stg-db267-02 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-staging-maria-db267-29092025-replica-vardata --zone=europe-west1-d`,
+                    `gcloud compute instances start stg-db267-07 --zone=europe-west1-d`
+                ],
+                 '#268 PRIMARY': [
+                    `gcloud compute disks create hw-dr-maria-db268-29092025-prim-vardata --project=hw-stag-sre-legacy-infra-824b --type=pd-balanced --zone=europe-west1-c --source-snapshot=projects/hw-dr-maria-db/global/snapshots/*`,
+                    `gcloud compute instances stop stg-db268-01 --zone=europe-west1-c`,
+                    `gcloud compute instances detach-disk stg-db268-01 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-dr-maria-db268-10102024-prim-vardata --zone=europe-west1-c`,
+                    `gcloud compute instances attach-disk stg-db268-01 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-dr-maria-db268-29092025-prim-vardata --zone=europe-west1-c`,
+                    `gcloud compute instances start stg-db268-01 --zone=europe-west1-c`
+                ],
+                '#268 REPLICA': [
+                    `gcloud compute disks create hw-dr-maria-db268-29092025-replica-vardata --project=hw-stag-sre-legacy-infra-824b --type=pd-balanced --zone=europe-west1-d --source-snapshot=projects/hw-dr-maria-db/global/snapshots/*`,
+                    `gcloud compute instances stop stg-db268-02 --zone=europe-west1-d`,
+                    `gcloud compute instances detach-disk stg-db268-02 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-dr-maria-db268-10102024-replica-vardata --zone=europe-west1-d`,
+                    `gcloud compute instances attach-disk stg-db268-02 --disk=projects/hw-stag-sre-legacy-infra-824b/zones/europe-west1-c/disks/hw-dr-maria-db268-29092025-replica-vardata --zone=europe-west1-d`,
+                    `gcloud compute instances start stg-db268-02 --zone=europe-west1-d`
+                ],
+            },
+
+            init() {
+                // Set interval for live clock
+                setInterval(() => {
+                    this.currentTime = new Date().toLocaleTimeString('en-IE', { timeZone: 'Europe/Dublin', hour: '2-digit', minute:'2-digit', second:'2-digit' });
+                }, 1000);
+                
+                // Set interval for code freeze check
+                this.updateCodeFreezeStatus();
+                setInterval(() => {
+                    this.updateCodeFreezeStatus();
+                }, 60000); // Update every minute
+            },
+            
+            updateCodeFreezeStatus() {
+                const now = new Date();
+                // We must manually construct the date for today in the correct timezone
+                const dublinTimeNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Dublin' }));
+
+                // Note: The prompt mentions Monday 29th September, which is not a real date for upcoming years.
+                // This logic assumes the year is 2025 for demonstration, as Sep 29, 2025 is a Monday.
+                // Please adjust the year if needed.
+                const isFreezeDay = dublinTimeNow.getFullYear() === 2025 &&
+                                    dublinTimeNow.getMonth() === 8 && // Month is 0-indexed, so September is 8
+                                    dublinTimeNow.getDate() === 29;
+
+                const isFreezeTime = dublinTimeNow.getHours() >= 9 && dublinTimeNow.getHours() < 14;
+
+                this.isCodeFreezeActive = isFreezeDay && isFreezeTime;
+            },
+
+            calculateProgress(tasks) {
+                if (!tasks || tasks.length === 0) return { percent: 0, completed: 0, total: 0 };
+                const totalTasks = tasks.length;
+                const completedTasks = tasks.filter(task => task.status === 'Completed' || task.status === 'Skipped').length;
+                const percent = (completedTasks / totalTasks) * 100;
+                return {
+                    percent: percent.toFixed(0),
+                    completed: completedTasks,
+                    total: totalTasks
+                };
+            },
+
+            get preparationProgress() {
+                return this.calculateProgress(this.roadmap.preparation);
+            },
+            
+            get preparationProgressColor() {
+                const percent = this.preparationProgress.percent;
+                if (percent < 40) return { bg: 'bg-red-200', fill: 'bg-red-500' };
+                if (percent < 80) return { bg: 'bg-yellow-200', fill: 'bg-yellow-500' };
+                return { bg: 'bg-green-200', fill: 'bg-green-500' };
+            },
+
+            get refreshDayProgress() {
+                return this.calculateProgress(this.roadmap.refreshDay);
+            },
+            
+            get refreshDayProgressColor() {
+                const percent = this.refreshDayProgress.percent;
+                if (percent < 40) return { bg: 'bg-red-200', fill: 'bg-red-500' };
+                if (percent < 80) return { bg: 'bg-yellow-200', fill: 'bg-yellow-500' };
+                return { bg: 'bg-green-200', fill: 'bg-green-500' };
+            },
+
+            toggleMenu(item) {
+                if (this.activeMenu === item) {
+                    this.activeMenu = null;
+                } else {
+                    this.activeMenu = item;
+                }
+            },
+
+            setStatus(item, newStatus) {
+                item.status = newStatus;
+                this.activeMenu = null; // Close menu on selection
+            },
+
+            openNotesModal(task) {
+                this.currentTaskForNotes = task;
+                this.noteInputText = task.notes;
+                this.notesModalOpen = true;
+            },
+
+            closeNotesModal() {
+                this.notesModalOpen = false;
+                this.currentTaskForNotes = null;
+                this.noteInputText = '';
+            },
+
+            saveNote() {
+                if (this.currentTaskForNotes) {
+                    this.currentTaskForNotes.notes = this.noteInputText;
+                }
+                this.closeNotesModal();
+            },
+            
+            copyToClipboard(button) {
+                const text = button.nextElementSibling.innerText;
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalText = button.innerText;
+                    button.innerText = 'Copied!';
+                    setTimeout(() => {
+                        button.innerText = originalText;
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy text: ', err);
+                    const originalText = button.innerText;
+                    button.innerText = 'Error!';
+                     setTimeout(() => {
+                        button.innerText = originalText;
+                    }, 2000);
+                });
+            }
+        }
+    }
+    </script>
+</body>
+</html>
+
