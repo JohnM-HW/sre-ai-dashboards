@@ -429,9 +429,9 @@
                 ],
                 refreshDay: [
                     { name: 'CODE FREEZE', details: 'No deployments to staging.', status: 'In Progress', notes: 'Starting at 9am'},
-                    { name: 'MariaDB Refresh', details: 'Disable CDC, TRUNCATE PINPAY, etc.', status: 'In Progress', notes: 'DB266, DB269 Complete'},
-                    { name: 'MongoDB Refresh', details: 'In parallel - update SequenceId table.', status: 'In Progress', notes: ''},
-                    { name: 'Firestore Refresh', details: 'To be done once MariaDB is complete.', status: 'In Progress', notes: ''},
+                    { name: 'MariaDB Refresh', details: 'Disable CDC, TRUNCATE PINPAY, etc.', status: 'Completed', notes: 'DB266, DB267, DB268, DB269 Complete'},
+                    { name: 'MongoDB Refresh', details: 'In parallel - update SequenceId table.', status: 'In Progress', notes: 'Restoring Snapshots'},
+                    { name: 'Firestore Refresh', details: 'To be done once MariaDB is complete.', status: 'In Progress', notes: 'No Manual intervention - Populated once CDC is back on'},
                     { name: 'QA Testing', details: 'Until 2:00 PM', status: 'Pending', notes: ''},
                 ]
             },
