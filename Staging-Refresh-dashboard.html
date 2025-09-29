@@ -428,19 +428,19 @@
                     { name: 'Richard Bywater activate test properties in Live', status: 'Completed', notes: ''},
                 ],
                 refreshDay: [
-                    { name: 'CODE FREEZE', details: 'No deployments to staging.', status: 'Pending', notes: 'Starting at 9am'},
-                    { name: 'MariaDB Refresh', details: 'Disable CDC, TRUNCATE PINPAY, etc.', status: 'Pending', notes: ''},
-                    { name: 'MongoDB Refresh', details: 'In parallel - update SequenceId table.', status: 'Pending', notes: ''},
-                    { name: 'Firestore Refresh', details: 'To be done once MariaDB is complete.', status: 'Pending', notes: ''},
+                    { name: 'CODE FREEZE', details: 'No deployments to staging.', status: 'In Progress', notes: 'Starting at 9am'},
+                    { name: 'MariaDB Refresh', details: 'Disable CDC, TRUNCATE PINPAY, etc.', status: 'In Progress', notes: 'DB266, DB269 Complete'},
+                    { name: 'MongoDB Refresh', details: 'In parallel - update SequenceId table.', status: 'In Progress', notes: ''},
+                    { name: 'Firestore Refresh', details: 'To be done once MariaDB is complete.', status: 'In Progress', notes: ''},
                     { name: 'QA Testing', details: 'Until 2:00 PM', status: 'Pending', notes: ''},
                 ]
             },
             databases: {
                 mariaDb: [
-                    { cluster: 'DB266 - MariaDB', included: true, developer: 'Richard Bywater', qa: 'N/A', status: 'Pending', notes: '' },
-                    { cluster: 'DB267 - MariaDB', included: false, developer: 'Lourens de Jager', qa: 'Richard Bywater', status: 'Skipped', notes: 'Excluding due to issue ITCC-21416 from last refresh.' },
+                    { cluster: 'DB266 - MariaDB', included: true, developer: 'Richard Bywater', qa: 'N/A', status: 'Completed', notes: '' },
+                    { cluster: 'DB267 - MariaDB', included: false, developer: 'Lourens de Jager', qa: 'Richard Bywater', status: 'In Progress', notes: 'Excluding due to issue ITCC-21416 from last refresh.' },
                     { cluster: 'DB268 - MariaDB', included: true, developer: 'Richard Bywater', qa: 'N/A', status: 'Pending', notes: '' },
-                    { cluster: 'DB269 - CloudSQL', included: true, developer: 'Richard Bywater', qa: 'N/A', status: 'Pending', notes: '' }
+                    { cluster: 'DB269 - CloudSQL', included: true, developer: 'Richard Bywater', qa: 'N/A', status: 'Completed', notes: '' }
                 ],
                 mongoDb: [
                     { cluster: 'booking-staging', included: false, status: 'Skipped', notes: '' },
